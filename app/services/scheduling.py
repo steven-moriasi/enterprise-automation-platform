@@ -4,17 +4,12 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.domain.enums import ExecutionStatus
-from app.domain.models import Execution
+from app.domain.models import DispatchOutbox, Execution
 from app.infrastructure.queue import ExecutionDispatcher
 from app.services.audit import append_audit_event
 
 
-def dispatch_due_executions(
-    session: Session,
-    dispatcher: ExecutionDispatcher,
-    *,
-    batch_size: int = 100,
-) -> int:
+def prepare_due_retries(session: Session, *, batch_size: int = 100) -> int:
     now = datetime.now(UTC)
     execution_ids = list(
         session.scalars(
@@ -27,7 +22,7 @@ def dispatch_due_executions(
             .limit(batch_size)
         )
     )
-    dispatched = 0
+    prepared = 0
     for execution_id in execution_ids:
         result = session.execute(
             update(Execution)
@@ -52,7 +47,38 @@ def dispatch_due_executions(
             execution_id=execution.id,
             details={"attempt_count": execution.attempt_count},
         )
+        session.add(DispatchOutbox(execution_id=execution_id))
         session.commit()
-        dispatcher.enqueue(execution_id)
-        dispatched += 1
-    return dispatched
+        prepared += 1
+    return prepared
+
+
+def publish_dispatch_outbox(
+    session: Session,
+    dispatcher: ExecutionDispatcher,
+    *,
+    batch_size: int = 100,
+) -> int:
+    records = list(
+        session.scalars(
+            select(DispatchOutbox)
+            .where(DispatchOutbox.published_at.is_(None))
+            .order_by(DispatchOutbox.created_at)
+            .limit(batch_size)
+        )
+    )
+    published = 0
+    for record in records:
+        try:
+            dispatcher.enqueue(record.execution_id)
+        except Exception as exc:
+            record.attempt_count += 1
+            record.last_error = str(exc)[:2000]
+            session.commit()
+            continue
+        record.attempt_count += 1
+        record.last_error = None
+        record.published_at = datetime.now(UTC)
+        session.commit()
+        published += 1
+    return published

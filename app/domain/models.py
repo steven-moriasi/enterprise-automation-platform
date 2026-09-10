@@ -140,3 +140,15 @@ class FailureRecord(Base):
     code: Mapped[str] = mapped_column(String(120))
     message: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class DispatchOutbox(Base):
+    __tablename__ = "dispatch_outbox"
+    __table_args__ = (Index("ix_dispatch_outbox_unpublished", "published_at", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    execution_id: Mapped[str] = mapped_column(ForeignKey("executions.id"), index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
