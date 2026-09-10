@@ -6,12 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.enums import ExecutionStatus, WorkflowStatus
-from app.domain.models import DispatchOutbox, Execution, Workflow
+from app.domain.enums import WorkflowStatus
+from app.domain.models import Execution, Workflow
 from app.domain.schemas import ExecutionCreate, ExecutionRead, WorkflowCreate, WorkflowRead
 from app.infrastructure.auth import AuthContext, require_roles
 from app.infrastructure.database import get_session
 from app.services.audit import append_audit_event
+from app.services.execution_requests import request_execution
 
 router = APIRouter(prefix="/api/v1/workflows", tags=["workflows"])
 AdminContext = Annotated[AuthContext, Depends(require_roles("admin"))]
@@ -106,51 +107,16 @@ def create_execution(
             detail="Only active workflows can be executed",
         )
 
-    existing = session.scalar(
-        select(Execution).where(
-            Execution.workflow_id == workflow_id,
-            Execution.idempotency_key == idempotency_key,
-        )
-    )
-    if existing is not None:
-        response.headers["Idempotent-Replay"] = "true"
-        return existing
-
     request_correlation_id = correlation_id or str(uuid.uuid4())
-    execution = Execution(
-        workflow_id=workflow_id,
-        status=ExecutionStatus.QUEUED,
+    execution, replayed = request_execution(
+        session,
+        workflow=workflow,
         trigger_type=payload.trigger_type,
         idempotency_key=idempotency_key,
         input_payload=payload.input_payload,
         correlation_id=request_correlation_id,
         requested_by=context.subject,
     )
-    session.add(execution)
-    try:
-        session.flush()
-        session.add(DispatchOutbox(execution_id=execution.id))
-        append_audit_event(
-            session,
-            event_type="execution_requested",
-            actor_id=context.subject,
-            correlation_id=request_correlation_id,
-            workflow_id=workflow_id,
-            execution_id=execution.id,
-            details={"trigger_type": payload.trigger_type.value},
-        )
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        replay = session.scalar(
-            select(Execution).where(
-                Execution.workflow_id == workflow_id,
-                Execution.idempotency_key == idempotency_key,
-            )
-        )
-        if replay is None:
-            raise
+    if replayed:
         response.headers["Idempotent-Replay"] = "true"
-        return replay
-    session.refresh(execution)
     return execution

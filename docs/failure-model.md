@@ -3,6 +3,8 @@
 | Failure | Expected behavior | Evidence |
 |---|---|---|
 | Duplicate client trigger | Unique workflow/idempotency key returns original execution | API test |
+| Duplicate signed webhook | Provider event ID returns the original execution | API test |
+| Invalid webhook signature | Reject before workflow lookup or execution creation | API test |
 | API commits but Redis is unavailable | Unpublished outbox row remains durable | scheduler test |
 | Scheduler publishes then crashes | Message may be duplicated | atomic worker claim test |
 | Duplicate queue delivery | Only one delivery changes `queued` to `running` | execution service test |
