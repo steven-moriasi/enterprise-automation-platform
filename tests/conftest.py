@@ -1,3 +1,4 @@
+import secrets
 from collections.abc import Generator
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.dependencies import get_execution_queue
+from app.core.config import Settings, get_settings
 from app.domain.models import Base
 from app.infrastructure.database import get_session
 from app.main import app
@@ -42,8 +44,14 @@ def session(session_factory: sessionmaker[Session]) -> Generator[Session, None, 
 
 
 @pytest.fixture
+def webhook_secret() -> str:
+    return secrets.token_urlsafe(32)
+
+
+@pytest.fixture
 def client(
     session_factory: sessionmaker[Session],
+    webhook_secret: str,
 ) -> Generator[TestClient, None, None]:
     queue = FakeQueue()
 
@@ -53,6 +61,9 @@ def client(
 
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_execution_queue] = lambda: queue
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        webhook_signing_secret=webhook_secret
+    )
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

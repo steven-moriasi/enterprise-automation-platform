@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -24,6 +27,11 @@ def create_workflow(client: TestClient, *, status: str = "active") -> dict[str, 
     response = client.post("/api/v1/workflows", json=workflow_payload(status=status))
     assert response.status_code == 201
     return response.json()
+
+
+def webhook_signature(body: bytes, secret: str) -> str:
+    digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return f"sha256={digest}"
 
 
 def test_workflow_creation_requires_admin_role(client: TestClient) -> None:
@@ -85,6 +93,42 @@ def test_execution_request_is_idempotent(client: TestClient) -> None:
     assert replay.headers["Idempotent-Replay"] == "true"
     assert replay.json()["id"] == first.json()["id"]
     assert replay.json()["input_payload"] == {"risk": "high"}
+
+
+def test_signed_webhook_is_idempotent(client: TestClient, webhook_secret: str) -> None:
+    workflow = create_workflow(client)
+    body = b'{"risk":"high","source":"identity-provider"}'
+    headers = {
+        "Content-Type": "application/json",
+        "X-Webhook-Event-ID": "identity-event-0001",
+        "X-Webhook-Signature": webhook_signature(body, webhook_secret),
+    }
+    path = f"/api/v1/workflows/{workflow['id']}/webhook"
+
+    first = client.post(path, content=body, headers=headers)
+    replay = client.post(path, content=body, headers=headers)
+
+    assert first.status_code == 202
+    assert first.json()["trigger_type"] == "webhook"
+    assert first.json()["input_payload"]["source"] == "identity-provider"
+    assert replay.headers["Idempotent-Replay"] == "true"
+    assert replay.json()["id"] == first.json()["id"]
+
+
+def test_webhook_rejects_invalid_signature(client: TestClient) -> None:
+    workflow = create_workflow(client)
+
+    response = client.post(
+        f"/api/v1/workflows/{workflow['id']}/webhook",
+        content=b'{"risk":"high"}',
+        headers={
+            "Content-Type": "application/json",
+            "X-Webhook-Event-ID": "identity-event-0002",
+            "X-Webhook-Signature": "sha256=invalid",
+        },
+    )
+
+    assert response.status_code == 401
 
 
 def test_execution_and_audit_are_visible_to_viewer(client: TestClient) -> None:

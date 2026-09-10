@@ -24,6 +24,7 @@ This repository makes those concerns explicit in the data model and execution st
 - Redis delivery queue
 - Separate API, scheduler, and worker processes
 - Durable interval schedules with concurrency-safe due-time claims
+- HMAC-SHA256 webhook triggers with event-level idempotency
 - Atomic worker claim protecting against duplicate delivery
 - Bounded exponential retry with deterministic jitter
 - Dead-letter state and operator-triggered recovery
@@ -159,6 +160,15 @@ curl -X POST http://localhost:8000/api/v1/workflows/WORKFLOW_ID/schedules \
 
 The scheduler advances the due time with a conditional update, creates an idempotent execution and outbox row, then lets the normal dispatch path deliver it.
 
+### Trigger it from a webhook
+
+Send the raw JSON body to `/api/v1/workflows/{workflow_id}/webhook` with:
+
+- `X-Webhook-Event-ID`: a stable provider event identifier;
+- `X-Webhook-Signature`: `sha256=` followed by the HMAC-SHA256 hex digest of the raw body.
+
+The signing secret must come from a managed runtime secret, not a workflow definition or source control.
+
 ## Authorization
 
 | Capability | Roles |
@@ -206,7 +216,6 @@ pytest --cov=app --cov-report=term-missing
 
 ## Roadmap
 
-- Webhook signature verification
 - Connector SDK with external idempotency contracts
 - OpenTelemetry trace export
 - PostgreSQL integration tests in CI

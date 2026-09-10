@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     auth_enabled: bool = False
     oidc_issuer: str = "http://localhost:8080/realms/automation"
     oidc_audience: str = "automation-api"
+    webhook_signing_secret: SecretStr | None = None
+    max_webhook_body_bytes: int = Field(default=65536, ge=1024, le=1048576)
     log_level: str = "INFO"
     worker_poll_seconds: float = Field(default=1.0, gt=0)
     scheduler_poll_seconds: float = Field(default=5.0, gt=0)

@@ -33,6 +33,7 @@ services:
       AUTOMATION_DATABASE_URL: postgresql+psycopg://automation:automation@postgres:5432/automation
       AUTOMATION_REDIS_URL: redis://redis:6379/0
       AUTOMATION_AUTH_ENABLED: "false"
+      AUTOMATION_WEBHOOK_SIGNING_SECRET: local-development-webhook-secret
       AUTOMATION_LOG_LEVEL: INFO
     depends_on:
       postgres:
