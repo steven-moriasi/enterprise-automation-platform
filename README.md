@@ -146,7 +146,7 @@ curl -X POST http://localhost:8000/api/v1/workflows/WORKFLOW_ID/executions \
   -H 'Content-Type: application/json' \
   -H 'X-Idempotency-Key: access-review-2026-09-10-user-42' \
   -H 'X-Correlation-ID: request-2026-09-10-user-42' \
-  -d '{"input_payload": {"risk": "high"}, "trigger_type": "manual"}'
+  -d '{"input_payload": {"risk": "high"}}'
 ```
 
 Submitting the same workflow and idempotency key returns the original execution with `Idempotent-Replay: true`.

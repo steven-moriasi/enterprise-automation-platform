@@ -95,6 +95,18 @@ def test_execution_request_is_idempotent(client: TestClient) -> None:
     assert replay.json()["input_payload"] == {"risk": "high"}
 
 
+def test_manual_endpoint_rejects_trigger_classification_override(client: TestClient) -> None:
+    workflow = create_workflow(client)
+
+    response = client.post(
+        f"/api/v1/workflows/{workflow['id']}/executions",
+        json={"input_payload": {}, "trigger_type": "webhook"},
+        headers={"X-Idempotency-Key": "classification-override-0001"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_signed_webhook_is_idempotent(client: TestClient, webhook_secret: str) -> None:
     workflow = create_workflow(client)
     body = b'{"risk":"high","source":"identity-provider"}'

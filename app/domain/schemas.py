@@ -8,6 +8,8 @@ from app.domain.types import JsonObject
 
 
 class StepDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=120)
     kind: Literal["assign", "condition", "emit_event"]
     config: JsonObject = Field(default_factory=dict)
@@ -23,6 +25,8 @@ class StepDefinition(BaseModel):
 
 
 class WorkflowCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(pattern=r"^[a-z][a-z0-9-]{2,119}$")
     description: str = Field(default="", max_length=2000)
     version: int = Field(default=1, ge=1)
@@ -42,6 +46,8 @@ class WorkflowRead(WorkflowCreate):
 
 
 class ScheduleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     interval_seconds: int = Field(ge=60, le=86400)
     starts_at: datetime | None = None
 
@@ -67,8 +73,9 @@ class ScheduleRead(BaseModel):
 
 
 class ExecutionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     input_payload: JsonObject = Field(default_factory=dict)
-    trigger_type: TriggerType = TriggerType.MANUAL
 
 
 class StepExecutionRead(BaseModel):

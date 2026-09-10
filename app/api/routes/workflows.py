@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.enums import WorkflowStatus
+from app.domain.enums import TriggerType, WorkflowStatus
 from app.domain.models import Execution, Workflow
 from app.domain.schemas import ExecutionCreate, ExecutionRead, WorkflowCreate, WorkflowRead
 from app.infrastructure.auth import AuthContext, require_roles
@@ -111,7 +111,7 @@ def create_execution(
     execution, replayed = request_execution(
         session,
         workflow=workflow,
-        trigger_type=payload.trigger_type,
+        trigger_type=TriggerType.MANUAL,
         idempotency_key=idempotency_key,
         input_payload=payload.input_payload,
         correlation_id=request_correlation_id,
