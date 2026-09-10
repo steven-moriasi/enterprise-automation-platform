@@ -83,6 +83,7 @@ class Execution(Base):
     __table_args__ = (
         UniqueConstraint("workflow_id", "idempotency_key", name="uq_execution_idempotency"),
         Index("ix_execution_status_retry", "status", "next_retry_at"),
+        Index("ix_execution_status_lease", "status", "lease_expires_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -97,6 +98,12 @@ class Execution(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     current_step: Mapped[int] = mapped_column(Integer, default=0)
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     correlation_id: Mapped[str] = mapped_column(String(160), index=True)

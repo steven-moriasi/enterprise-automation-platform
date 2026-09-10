@@ -1,4 +1,6 @@
 import signal
+import socket
+import uuid
 from threading import Event
 
 import structlog
@@ -23,13 +25,18 @@ def run() -> None:
     signal.signal(signal.SIGTERM, request_shutdown)
     signal.signal(signal.SIGINT, request_shutdown)
     queue = RedisExecutionQueue(settings.redis_url)
-    logger.info("worker_started")
+    worker_id = f"{socket.gethostname()}:{uuid.uuid4()}"
+    logger.info("worker_started", worker_id=worker_id)
     while not shutdown.is_set():
         execution_id = queue.dequeue(timeout_seconds=max(1, round(settings.worker_poll_seconds)))
         if execution_id is None:
             continue
         with SessionFactory() as session:
-            processed = ExecutionService(session).run(execution_id)
+            processed = ExecutionService(
+                session,
+                worker_id=worker_id,
+                lease_seconds=settings.worker_lease_seconds,
+            ).run(execution_id)
             logger.info(
                 "execution_delivery_handled",
                 execution_id=execution_id,

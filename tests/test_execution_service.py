@@ -82,6 +82,8 @@ def test_execution_completes_and_duplicate_delivery_is_ignored(session: Session)
     session.refresh(execution)
     assert execution.status == ExecutionStatus.SUCCEEDED
     assert execution.attempt_count == 1
+    assert execution.lease_token is None
+    assert execution.lease_expires_at is None
     assert execution.output_payload == {
         "owner": "operations",
         "field": "risk",
@@ -118,6 +120,7 @@ def test_transient_failure_is_scheduled_then_resumed(session: Session) -> None:
     session.refresh(execution)
     assert execution.status == ExecutionStatus.RETRY_SCHEDULED
     assert execution.attempt_count == 1
+    assert execution.lease_token is None
     assert execution.next_retry_at is not None
     assert execution.last_error_code == "step_failed"
 

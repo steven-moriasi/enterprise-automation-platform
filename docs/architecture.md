@@ -15,7 +15,9 @@
 
 The API never writes directly to Redis as the only record of accepted work. The execution and dispatch intent are committed together. Publishing is asynchronous, so the API can return `202 Accepted` while delivery is pending.
 
-Worker claims are conditional updates from `queued` to `running`. This prevents two deliveries from advancing the same execution concurrently. Connector-level side effects require their own idempotency contract because a process can fail after the external system commits but before the local step result commits.
+Worker claims are conditional updates from `queued` to `running`. This prevents two deliveries from advancing the same execution concurrently. Each claim has an expiring fencing token that the worker renews around built-in steps. The scheduler conditionally requeues expired claims or dead-letters them after the workflow attempt limit.
+
+Connector-level side effects require their own idempotency contract because a process can fail after the external system commits but before the local step result commits.
 
 ## Scaling path
 

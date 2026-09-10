@@ -12,11 +12,13 @@
 | Transient step failure | Retry scheduled with bounded backoff and jitter | retry test |
 | Permanent step failure | Immediate dead-letter state | failure test |
 | Repeated transient failure | Dead-letter after maximum attempts | exhaustion test |
-| Worker crashes while `running` | Requires lease/reaper enhancement | documented limitation |
+| Worker crashes while `running` | Scheduler requeues an expired lease or dead-letters after the attempt limit | lease-reaper test |
 | Database unavailable | Readiness fails; work is not acknowledged locally | readiness behavior |
 | Redis unavailable | Readiness fails; outbox record remains unpublished | scheduler behavior |
 | External side effect succeeds before local commit | Connector must supply idempotency/inbox evidence | adapter contract |
 
-## Known gap: abandoned running executions
+## Worker lease boundary
 
-The first release has an atomic claim but no expiring worker lease. A process terminated while an execution is `running` requires operator intervention. The next reliability increment will add lease ownership, heartbeats, and a bounded reaper policy before the repository is considered portfolio ready.
+Each claim receives a random fencing token and bounded expiry. The worker renews the lease before and after each built-in step. If the lease has been reaped, the stale worker cannot persist another step transition through the normal execution path.
+
+Connectors that perform external side effects must still supply an idempotency key because no database lease can roll back an already accepted third-party request.

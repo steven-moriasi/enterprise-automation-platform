@@ -26,6 +26,7 @@ This repository makes those concerns explicit in the data model and execution st
 - Durable interval schedules with concurrency-safe due-time claims
 - HMAC-SHA256 webhook triggers with event-level idempotency
 - Atomic worker claim protecting against duplicate delivery
+- Expiring worker leases, heartbeats, fencing tokens, and bounded reaping
 - Bounded exponential retry with deterministic jitter
 - Dead-letter state and operator-triggered recovery
 - Per-step execution history
@@ -213,6 +214,7 @@ pytest --cov=app --cov-report=term-missing
 - [ADR 001: Modular monolith](docs/adr/001-modular-monolith.md)
 - [ADR 002: PostgreSQL source of truth](docs/adr/002-postgres-source-of-truth.md)
 - [ADR 003: Transactional dispatch outbox](docs/adr/003-transactional-outbox.md)
+- [ADR 004: Expiring worker leases](docs/adr/004-expiring-worker-leases.md)
 
 ## Roadmap
 
