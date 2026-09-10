@@ -211,6 +211,7 @@ pytest --cov=app --cov-report=term-missing
 - [Failure model](docs/failure-model.md)
 - [Threat model](docs/threat-model.md)
 - [Operations runbook](docs/runbook.md)
+- [Principal Engineer review](docs/principal-engineer-review.md)
 - [ADR 001: Modular monolith](docs/adr/001-modular-monolith.md)
 - [ADR 002: PostgreSQL source of truth](docs/adr/002-postgres-source-of-truth.md)
 - [ADR 003: Transactional dispatch outbox](docs/adr/003-transactional-outbox.md)
