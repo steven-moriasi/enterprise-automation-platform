@@ -18,15 +18,19 @@ router = APIRouter(prefix="/api/v1/workflows", tags=["webhooks"])
 json_object_adapter = TypeAdapter(JsonObject)
 
 
+async def read_webhook_body(request: Request) -> bytes:
+    return await request.body()
+
+
 @router.post(
     "/{workflow_id}/webhook",
     response_model=ExecutionRead,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def trigger_webhook(
+def trigger_webhook(
     workflow_id: str,
-    request: Request,
     response: Response,
+    body: Annotated[bytes, Depends(read_webhook_body)],
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     signature: Annotated[str, Header(alias="X-Webhook-Signature")],
@@ -40,7 +44,6 @@ async def trigger_webhook(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Webhook signing is not configured",
         )
-    body = await request.body()
     if len(body) > settings.max_webhook_body_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
