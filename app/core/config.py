@@ -1,0 +1,27 @@
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="AUTOMATION_",
+        extra="ignore",
+    )
+
+    environment: str = "development"
+    database_url: str = "sqlite:///./automation.db"
+    redis_url: str = "redis://localhost:6379/0"
+    auth_enabled: bool = False
+    oidc_issuer: str = "http://localhost:8080/realms/automation"
+    oidc_audience: str = "automation-api"
+    log_level: str = "INFO"
+    worker_poll_seconds: float = Field(default=1.0, gt=0)
+    scheduler_poll_seconds: float = Field(default=5.0, gt=0)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
