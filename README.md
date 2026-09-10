@@ -23,6 +23,7 @@ This repository makes those concerns explicit in the data model and execution st
 - Transactional dispatch outbox
 - Redis delivery queue
 - Separate API, scheduler, and worker processes
+- Durable interval schedules with concurrency-safe due-time claims
 - Atomic worker claim protecting against duplicate delivery
 - Bounded exponential retry with deterministic jitter
 - Dead-letter state and operator-triggered recovery
@@ -148,6 +149,16 @@ curl -X POST http://localhost:8000/api/v1/workflows/WORKFLOW_ID/executions \
 
 Submitting the same workflow and idempotency key returns the original execution with `Idempotent-Replay: true`.
 
+### Schedule it
+
+```bash
+curl -X POST http://localhost:8000/api/v1/workflows/WORKFLOW_ID/schedules \
+  -H 'Content-Type: application/json' \
+  -d '{"interval_seconds": 300}'
+```
+
+The scheduler advances the due time with a conditional update, creates an idempotent execution and outbox row, then lets the normal dispatch path deliver it.
+
 ## Authorization
 
 | Capability | Roles |
@@ -195,7 +206,7 @@ pytest --cov=app --cov-report=term-missing
 
 ## Roadmap
 
-- Schedule definitions and webhook signature verification
+- Webhook signature verification
 - Connector SDK with external idempotency contracts
 - OpenTelemetry trace export
 - PostgreSQL integration tests in CI

@@ -57,6 +57,25 @@ class Workflow(Base):
     )
 
     executions: Mapped[list["Execution"]] = relationship(back_populates="workflow")
+    schedules: Mapped[list["WorkflowSchedule"]] = relationship(
+        back_populates="workflow", cascade="all, delete-orphan"
+    )
+
+
+class WorkflowSchedule(Base):
+    __tablename__ = "workflow_schedules"
+    __table_args__ = (Index("ix_workflow_schedule_due", "enabled", "next_run_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workflow_id: Mapped[str] = mapped_column(ForeignKey("workflows.id"), index=True)
+    interval_seconds: Mapped[int] = mapped_column(Integer)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    workflow: Mapped[Workflow] = relationship(back_populates="schedules")
 
 
 class Execution(Base):
