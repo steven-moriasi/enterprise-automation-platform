@@ -95,13 +95,16 @@ class ExecutionService:
                     step_index=index,
                     step_name=name,
                     step_kind=kind,
+                    status=StepStatus.RUNNING,
+                    attempt_count=1,
+                    started_at=datetime.now(UTC),
                 )
                 self.session.add(row)
                 step_rows[index] = row
-
-            row.status = StepStatus.RUNNING
-            row.attempt_count += 1
-            row.started_at = datetime.now(UTC)
+            else:
+                row.status = StepStatus.RUNNING
+                row.attempt_count += 1
+                row.started_at = datetime.now(UTC)
             row.error_message = None
             self.session.commit()
 
@@ -147,7 +150,7 @@ class ExecutionService:
                 )
                 return
 
-            accumulated_output.update(output)
+            accumulated_output = {**accumulated_output, **output}
             row.status = StepStatus.SUCCEEDED
             row.output_payload = output
             row.finished_at = datetime.now(UTC)
