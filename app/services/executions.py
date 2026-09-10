@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from datetime import UTC, datetime, timedelta
 from time import monotonic
 
@@ -25,11 +26,22 @@ def retry_delay_seconds(execution_id: str, attempt: int, base_seconds: int) -> f
 
 
 class ExecutionService:
-    def __init__(self, session: Session, runner: StepRunner | None = None) -> None:
+    def __init__(
+        self,
+        session: Session,
+        runner: StepRunner | None = None,
+        *,
+        worker_id: str = "test-worker",
+        lease_seconds: int = 60,
+    ) -> None:
         self.session = session
         self.runner = runner or DefaultStepRunner()
+        self.worker_id = worker_id
+        self.lease_seconds = lease_seconds
+        self.lease_token = str(uuid.uuid4())
 
     def run(self, execution_id: str) -> bool:
+        now = datetime.now(UTC)
         claimed = self.session.execute(
             update(Execution)
             .where(
@@ -41,6 +53,10 @@ class ExecutionService:
                 started_at=datetime.now(UTC),
                 attempt_count=Execution.attempt_count + 1,
                 next_retry_at=None,
+                lease_owner=self.worker_id,
+                lease_token=self.lease_token,
+                heartbeat_at=now,
+                lease_expires_at=now + timedelta(seconds=self.lease_seconds),
             )
         )
         self.session.commit()
@@ -70,6 +86,8 @@ class ExecutionService:
         step_rows = {row.step_index: row for row in execution.step_executions}
 
         for index in range(execution.current_step, len(execution.workflow.steps)):
+            if not self._renew_lease(execution.id):
+                return
             definition = execution.workflow.steps[index]
             name = definition.get("name")
             kind = definition.get("kind")
@@ -119,6 +137,8 @@ class ExecutionService:
                     ),
                 )
             except StepFailure as exc:
+                if not self._renew_lease(execution.id):
+                    return
                 row.status = StepStatus.FAILED
                 row.error_message = str(exc)
                 row.finished_at = datetime.now(UTC)
@@ -132,6 +152,8 @@ class ExecutionService:
                 )
                 return
             except Exception:
+                if not self._renew_lease(execution.id):
+                    return
                 logger.exception(
                     "unexpected_step_failure",
                     execution_id=execution.id,
@@ -150,6 +172,8 @@ class ExecutionService:
                 )
                 return
 
+            if not self._renew_lease(execution.id):
+                return
             accumulated_output = {**accumulated_output, **output}
             row.status = StepStatus.SUCCEEDED
             row.output_payload = output
@@ -168,8 +192,11 @@ class ExecutionService:
             step_outcomes.labels(kind=kind, status="succeeded").inc()
             self.session.commit()
 
+        if not self._renew_lease(execution.id):
+            return
         execution.status = ExecutionStatus.SUCCEEDED
         execution.finished_at = datetime.now(UTC)
+        self._clear_lease(execution)
         execution.last_error_code = None
         execution.last_error_message = None
         append_audit_event(
@@ -199,6 +226,7 @@ class ExecutionService:
         execution.last_error_code = code
         execution.last_error_message = message
         execution.current_step = step_index
+        self._clear_lease(execution)
         self.session.add(
             FailureRecord(
                 execution_id=execution.id,
@@ -244,3 +272,27 @@ class ExecutionService:
             details=details,
         )
         self.session.commit()
+
+    def _renew_lease(self, execution_id: str) -> bool:
+        now = datetime.now(UTC)
+        renewed = self.session.execute(
+            update(Execution)
+            .where(
+                Execution.id == execution_id,
+                Execution.status == ExecutionStatus.RUNNING,
+                Execution.lease_token == self.lease_token,
+            )
+            .values(
+                heartbeat_at=now,
+                lease_expires_at=now + timedelta(seconds=self.lease_seconds),
+            )
+        )
+        self.session.commit()
+        return renewed.rowcount == 1
+
+    @staticmethod
+    def _clear_lease(execution: Execution) -> None:
+        execution.lease_owner = None
+        execution.lease_token = None
+        execution.lease_expires_at = None
+        execution.heartbeat_at = None

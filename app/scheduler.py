@@ -11,6 +11,7 @@ from app.services.scheduling import (
     prepare_due_retries,
     prepare_due_schedules,
     publish_dispatch_outbox,
+    reap_expired_executions,
 )
 
 shutdown = Event()
@@ -30,12 +31,14 @@ def run() -> None:
     logger.info("scheduler_started")
     while not shutdown.is_set():
         with SessionFactory() as session:
+            reaped = reap_expired_executions(session)
             schedules = prepare_due_schedules(session)
             retries = prepare_due_retries(session)
             published = publish_dispatch_outbox(session, queue)
-            if schedules or retries or published:
+            if reaped or schedules or retries or published:
                 logger.info(
                     "scheduler_cycle_completed",
+                    leases_reaped=reaped,
                     schedules_prepared=schedules,
                     retries_prepared=retries,
                     dispatches_published=published,

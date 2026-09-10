@@ -1,14 +1,22 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import ExecutionStatus
-from app.domain.models import AuditEvent, DispatchOutbox, Execution, WorkflowSchedule
+from app.domain.models import (
+    AuditEvent,
+    DispatchOutbox,
+    Execution,
+    FailureRecord,
+    WorkflowSchedule,
+)
 from app.services.scheduling import (
     prepare_due_retries,
     prepare_due_schedules,
     publish_dispatch_outbox,
+    reap_expired_executions,
 )
 from tests.test_execution_service import create_execution
 
@@ -22,6 +30,48 @@ class RecordingDispatcher:
         if self.fail:
             raise ConnectionError("Redis unavailable")
         self.execution_ids.append(execution_id)
+
+
+def test_expired_worker_lease_is_requeued(session: Session) -> None:
+    execution = create_execution(session)
+    execution.status = ExecutionStatus.RUNNING
+    execution.attempt_count = 1
+    execution.lease_owner = "worker-1"
+    execution.lease_token = str(uuid.uuid4())
+    execution.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    session.commit()
+
+    assert reap_expired_executions(session) == 1
+
+    session.refresh(execution)
+    assert execution.status == ExecutionStatus.QUEUED
+    assert execution.lease_token is None
+    assert session.scalar(
+        select(DispatchOutbox).where(DispatchOutbox.execution_id == execution.id)
+    )
+
+
+def test_expired_worker_lease_is_dead_lettered_after_attempt_limit(
+    session: Session,
+) -> None:
+    execution = create_execution(session, max_attempts=1)
+    execution.status = ExecutionStatus.RUNNING
+    execution.attempt_count = 1
+    execution.lease_owner = "worker-1"
+    execution.lease_token = str(uuid.uuid4())
+    execution.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    session.commit()
+
+    assert reap_expired_executions(session) == 1
+
+    session.refresh(execution)
+    failure = session.scalar(
+        select(FailureRecord).where(FailureRecord.execution_id == execution.id)
+    )
+    assert execution.status == ExecutionStatus.DEAD_LETTER
+    assert execution.finished_at is not None
+    assert failure is not None
+    assert failure.code == "worker_lease_expired"
 
 
 def test_due_schedule_creates_execution_and_advances_interval(session: Session) -> None:

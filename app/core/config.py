@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     max_webhook_body_bytes: int = Field(default=65536, ge=1024, le=1048576)
     log_level: str = "INFO"
     worker_poll_seconds: float = Field(default=1.0, gt=0)
+    worker_lease_seconds: int = Field(default=60, ge=10, le=3600)
     scheduler_poll_seconds: float = Field(default=5.0, gt=0)
 
 

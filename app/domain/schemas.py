@@ -89,6 +89,8 @@ class ExecutionRead(BaseModel):
     attempt_count: int
     current_step: int
     next_retry_at: datetime | None
+    lease_expires_at: datetime | None
+    heartbeat_at: datetime | None
     last_error_code: str | None
     last_error_message: str | None
     correlation_id: str
