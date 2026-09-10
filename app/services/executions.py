@@ -20,7 +20,8 @@ def retry_delay_seconds(execution_id: str, attempt: int, base_seconds: int) -> f
     exponential = base_seconds * (2 ** max(attempt - 1, 0))
     digest = hashlib.sha256(f"{execution_id}:{attempt}".encode()).digest()
     jitter_ratio = (int.from_bytes(digest[:2]) / 65535 - 0.5) * 0.4
-    return max(1.0, exponential * (1 + jitter_ratio))
+    delay = float(exponential) * (1.0 + jitter_ratio)
+    return max(1.0, delay)
 
 
 class ExecutionService:
@@ -73,7 +74,11 @@ class ExecutionService:
             name = definition.get("name")
             kind = definition.get("kind")
             config = definition.get("config", {})
-            if not isinstance(name, str) or not isinstance(kind, str) or not isinstance(config, dict):
+            if (
+                not isinstance(name, str)
+                or not isinstance(kind, str)
+                or not isinstance(config, dict)
+            ):
                 self._fail_execution(
                     execution,
                     index,

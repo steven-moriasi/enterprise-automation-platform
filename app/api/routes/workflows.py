@@ -87,7 +87,10 @@ def create_execution(
     context: OperatorContext,
     session: Annotated[Session, Depends(get_session)],
     response: Response,
-    idempotency_key: Annotated[str, Header(alias="X-Idempotency-Key", min_length=8, max_length=160)],
+    idempotency_key: Annotated[
+        str,
+        Header(alias="X-Idempotency-Key", min_length=8, max_length=160),
+    ],
     correlation_id: Annotated[
         str | None,
         Header(alias="X-Correlation-ID", min_length=8, max_length=160),
