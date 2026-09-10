@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -92,6 +93,7 @@ def retry_dead_letter_execution(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only dead-lettered executions can be retried manually",
         )
+    prior_attempt_count = execution.attempt_count
     execution.status = ExecutionStatus.QUEUED
     execution.attempt_count = 0
     execution.finished_at = None
@@ -106,7 +108,42 @@ def retry_dead_letter_execution(
         correlation_id=execution.correlation_id,
         workflow_id=execution.workflow_id,
         execution_id=execution.id,
-        details={"prior_attempt_count": execution.attempt_count},
+        details={"prior_attempt_count": prior_attempt_count},
+    )
+    session.commit()
+    return execution
+
+
+@router.post(
+    "/{execution_id}/cancel",
+    response_model=ExecutionRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def cancel_execution(
+    execution_id: str,
+    context: OperatorContext,
+    session: Annotated[Session, Depends(get_session)],
+) -> Execution:
+    execution = _get_execution(session, execution_id)
+    if execution.status not in {
+        ExecutionStatus.QUEUED,
+        ExecutionStatus.RETRY_SCHEDULED,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only queued or retry-scheduled executions can be cancelled",
+        )
+    execution.status = ExecutionStatus.CANCELLED
+    execution.next_retry_at = None
+    execution.finished_at = datetime.now(UTC)
+    append_audit_event(
+        session,
+        event_type="execution_cancelled",
+        actor_id=context.subject,
+        correlation_id=execution.correlation_id,
+        workflow_id=execution.workflow_id,
+        execution_id=execution.id,
+        details={"attempt_count": execution.attempt_count},
     )
     session.commit()
     return execution

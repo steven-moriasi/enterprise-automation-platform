@@ -45,6 +45,13 @@ class ScheduleCreate(BaseModel):
     interval_seconds: int = Field(ge=60, le=86400)
     starts_at: datetime | None = None
 
+    @field_validator("starts_at")
+    @classmethod
+    def require_timezone(cls, starts_at: datetime | None) -> datetime | None:
+        if starts_at is not None and starts_at.tzinfo is None:
+            raise ValueError("starts_at must include a timezone")
+        return starts_at
+
 
 class ScheduleRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

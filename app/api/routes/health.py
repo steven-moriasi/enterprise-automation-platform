@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -26,7 +27,7 @@ def readiness(
     try:
         session.execute(text("SELECT 1"))
         queue.ping()
-    except (SQLAlchemyError, OSError) as exc:
+    except (SQLAlchemyError, RedisError, OSError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="A required dependency is unavailable",

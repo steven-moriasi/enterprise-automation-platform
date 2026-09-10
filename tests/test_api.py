@@ -219,6 +219,26 @@ def test_manual_retry_resets_attempt_budget(
     assert response.json()["status"] == "queued"
     assert response.json()["attempt_count"] == 0
     assert response.json()["last_error_code"] is None
+    audit = client.get(f"/api/v1/executions/{execution_data['id']}/audit").json()
+    assert audit[-1]["details"]["prior_attempt_count"] == 3
+
+
+def test_operator_can_cancel_queued_execution(client: TestClient) -> None:
+    workflow = create_workflow(client)
+    execution = client.post(
+        f"/api/v1/workflows/{workflow['id']}/executions",
+        json={"input_payload": {}},
+        headers={"X-Idempotency-Key": "cancel-request-0001"},
+    ).json()
+
+    response = client.post(
+        f"/api/v1/executions/{execution['id']}/cancel",
+        headers={"X-Dev-Roles": "operator"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "cancelled"
+    assert response.json()["finished_at"] is not None
 
 
 def test_admin_can_schedule_active_workflow(client: TestClient) -> None:
@@ -248,6 +268,17 @@ def test_draft_workflow_cannot_be_scheduled(client: TestClient) -> None:
     )
 
     assert response.status_code == 409
+
+
+def test_schedule_start_requires_timezone(client: TestClient) -> None:
+    workflow = create_workflow(client)
+
+    response = client.post(
+        f"/api/v1/workflows/{workflow['id']}/schedules",
+        json={"interval_seconds": 300, "starts_at": "2026-09-10T12:00:00"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_platform_health_endpoints(client: TestClient) -> None:
