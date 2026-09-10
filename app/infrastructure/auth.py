@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, cast
 
@@ -42,7 +43,10 @@ def get_auth_context(
         return AuthContext(subject=x_dev_subject, roles=roles)
 
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bearer token required",
+        )
 
     try:
         jwks = PyJWKClient(f"{settings.oidc_issuer.rstrip('/')}/protocol/openid-connect/certs")
@@ -65,11 +69,14 @@ def get_auth_context(
 
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token subject missing")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token subject missing",
+        )
     return AuthContext(subject=subject, roles=_extract_roles(claims))
 
 
-def require_roles(*allowed: str):
+def require_roles(*allowed: str) -> Callable[[AuthContext], AuthContext]:
     normalized = frozenset(role.lower() for role in allowed)
 
     def dependency(context: Annotated[AuthContext, Depends(get_auth_context)]) -> AuthContext:

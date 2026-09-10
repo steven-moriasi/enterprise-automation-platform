@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Protocol, cast
 
 from redis import Redis
 
@@ -17,7 +17,10 @@ class RedisExecutionQueue:
         self.client.rpush(self.queue_name, execution_id)
 
     def dequeue(self, timeout_seconds: int = 5) -> str | None:
-        item = self.client.blpop(self.queue_name, timeout=timeout_seconds)
+        item = cast(
+            tuple[str, str] | None,
+            self.client.blpop([self.queue_name], timeout=timeout_seconds),
+        )
         return item[1] if item else None
 
     def ping(self) -> bool:
