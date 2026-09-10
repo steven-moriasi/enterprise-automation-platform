@@ -1,4 +1,8 @@
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.domain.enums import ExecutionStatus
+from app.domain.models import Execution
 
 
 def workflow_payload(*, status: str = "active") -> dict[str, object]:
@@ -107,6 +111,32 @@ def test_execution_and_audit_are_visible_to_viewer(client: TestClient) -> None:
     assert [event["event_type"] for event in audit_response.json()] == ["execution_requested"]
 
 
+def test_execution_history_can_be_filtered(client: TestClient) -> None:
+    first_workflow = create_workflow(client)
+    second_payload = workflow_payload()
+    second_payload["name"] = "vendor-access-review"
+    second_workflow = client.post("/api/v1/workflows", json=second_payload).json()
+    first_execution = client.post(
+        f"/api/v1/workflows/{first_workflow['id']}/executions",
+        json={"input_payload": {}},
+        headers={"X-Idempotency-Key": "history-request-0001"},
+    ).json()
+    client.post(
+        f"/api/v1/workflows/{second_workflow['id']}/executions",
+        json={"input_payload": {}},
+        headers={"X-Idempotency-Key": "history-request-0002"},
+    )
+
+    response = client.get(
+        "/api/v1/executions",
+        params={"workflow_id": first_workflow["id"], "status": "queued"},
+        headers={"X-Dev-Roles": "viewer"},
+    )
+
+    assert response.status_code == 200
+    assert [execution["id"] for execution in response.json()] == [first_execution["id"]]
+
+
 def test_manual_retry_requires_dead_letter_state(client: TestClient) -> None:
     workflow = create_workflow(client)
     execution = client.post(
@@ -118,6 +148,33 @@ def test_manual_retry_requires_dead_letter_state(client: TestClient) -> None:
     response = client.post(f"/api/v1/executions/{execution['id']}/retry")
 
     assert response.status_code == 409
+
+
+def test_manual_retry_resets_attempt_budget(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+) -> None:
+    workflow = create_workflow(client)
+    execution_data = client.post(
+        f"/api/v1/workflows/{workflow['id']}/executions",
+        json={"input_payload": {}},
+        headers={"X-Idempotency-Key": "access-review-user-45"},
+    ).json()
+    with session_factory() as session:
+        execution = session.get(Execution, execution_data["id"])
+        assert execution is not None
+        execution.status = ExecutionStatus.DEAD_LETTER
+        execution.attempt_count = 3
+        execution.last_error_code = "dependency_unavailable"
+        execution.last_error_message = "Dependency unavailable"
+        session.commit()
+
+    response = client.post(f"/api/v1/executions/{execution_data['id']}/retry")
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    assert response.json()["attempt_count"] == 0
+    assert response.json()["last_error_code"] is None
 
 
 def test_admin_can_schedule_active_workflow(client: TestClient) -> None:
