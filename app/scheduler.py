@@ -7,7 +7,11 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.infrastructure.database import SessionFactory
 from app.infrastructure.queue import RedisExecutionQueue
-from app.services.scheduling import prepare_due_retries, publish_dispatch_outbox
+from app.services.scheduling import (
+    prepare_due_retries,
+    prepare_due_schedules,
+    publish_dispatch_outbox,
+)
 
 shutdown = Event()
 logger = structlog.get_logger()
@@ -26,11 +30,13 @@ def run() -> None:
     logger.info("scheduler_started")
     while not shutdown.is_set():
         with SessionFactory() as session:
+            schedules = prepare_due_schedules(session)
             retries = prepare_due_retries(session)
             published = publish_dispatch_outbox(session, queue)
-            if retries or published:
+            if schedules or retries or published:
                 logger.info(
                     "scheduler_cycle_completed",
+                    schedules_prepared=schedules,
                     retries_prepared=retries,
                     dispatches_published=published,
                 )

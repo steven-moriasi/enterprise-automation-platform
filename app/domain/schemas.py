@@ -41,6 +41,24 @@ class WorkflowRead(WorkflowCreate):
     updated_at: datetime
 
 
+class ScheduleCreate(BaseModel):
+    interval_seconds: int = Field(ge=60, le=86400)
+    starts_at: datetime | None = None
+
+
+class ScheduleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    workflow_id: str
+    interval_seconds: int
+    enabled: bool
+    next_run_at: datetime
+    last_run_at: datetime | None
+    created_by: str
+    created_at: datetime
+
+
 class ExecutionCreate(BaseModel):
     input_payload: JsonObject = Field(default_factory=dict)
     trigger_type: TriggerType = TriggerType.MANUAL

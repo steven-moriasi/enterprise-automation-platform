@@ -6,6 +6,7 @@
 | API commits but Redis is unavailable | Unpublished outbox row remains durable | scheduler test |
 | Scheduler publishes then crashes | Message may be duplicated | atomic worker claim test |
 | Duplicate queue delivery | Only one delivery changes `queued` to `running` | execution service test |
+| Two schedulers observe one due interval | Conditional due-time update creates one execution | scheduling test |
 | Transient step failure | Retry scheduled with bounded backoff and jitter | retry test |
 | Permanent step failure | Immediate dead-letter state | failure test |
 | Repeated transient failure | Dead-letter after maximum attempts | exhaustion test |

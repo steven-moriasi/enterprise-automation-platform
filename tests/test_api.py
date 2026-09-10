@@ -120,6 +120,35 @@ def test_manual_retry_requires_dead_letter_state(client: TestClient) -> None:
     assert response.status_code == 409
 
 
+def test_admin_can_schedule_active_workflow(client: TestClient) -> None:
+    workflow = create_workflow(client)
+
+    created = client.post(
+        f"/api/v1/workflows/{workflow['id']}/schedules",
+        json={"interval_seconds": 300},
+    )
+    listed = client.get(
+        f"/api/v1/workflows/{workflow['id']}/schedules",
+        headers={"X-Dev-Roles": "viewer"},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["interval_seconds"] == 300
+    assert listed.status_code == 200
+    assert [schedule["id"] for schedule in listed.json()] == [created.json()["id"]]
+
+
+def test_draft_workflow_cannot_be_scheduled(client: TestClient) -> None:
+    workflow = create_workflow(client, status="draft")
+
+    response = client.post(
+        f"/api/v1/workflows/{workflow['id']}/schedules",
+        json={"interval_seconds": 300},
+    )
+
+    assert response.status_code == 409
+
+
 def test_platform_health_endpoints(client: TestClient) -> None:
     assert client.get("/health").json() == {"status": "ok"}
     assert client.get("/ready").json() == {"status": "ready"}

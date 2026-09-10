@@ -4,8 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import ExecutionStatus
-from app.domain.models import AuditEvent, DispatchOutbox
-from app.services.scheduling import prepare_due_retries, publish_dispatch_outbox
+from app.domain.models import AuditEvent, DispatchOutbox, Execution, WorkflowSchedule
+from app.services.scheduling import (
+    prepare_due_retries,
+    prepare_due_schedules,
+    publish_dispatch_outbox,
+)
 from tests.test_execution_service import create_execution
 
 
@@ -18,6 +22,38 @@ class RecordingDispatcher:
         if self.fail:
             raise ConnectionError("Redis unavailable")
         self.execution_ids.append(execution_id)
+
+
+def test_due_schedule_creates_execution_and_advances_interval(session: Session) -> None:
+    source_execution = create_execution(session)
+    due_at = datetime.now(UTC) - timedelta(seconds=1)
+    schedule = WorkflowSchedule(
+        workflow_id=source_execution.workflow_id,
+        interval_seconds=300,
+        next_run_at=due_at,
+        created_by="test",
+    )
+    session.add(schedule)
+    session.commit()
+
+    assert prepare_due_schedules(session) == 1
+    assert prepare_due_schedules(session) == 0
+
+    session.refresh(schedule)
+    scheduled_execution = session.scalar(
+        select(Execution).where(Execution.idempotency_key.like(f"schedule:{schedule.id}:%"))
+    )
+    assert schedule.last_run_at is not None
+    assert schedule.next_run_at > schedule.last_run_at
+    assert scheduled_execution is not None
+    assert scheduled_execution.status == ExecutionStatus.QUEUED
+    assert scheduled_execution.trigger_type.value == "schedule"
+    assert scheduled_execution.input_payload["schedule_id"] == schedule.id
+    assert session.scalar(
+        select(DispatchOutbox).where(
+            DispatchOutbox.execution_id == scheduled_execution.id
+        )
+    )
 
 
 def test_due_retry_creates_transactional_dispatch(session: Session) -> None:
