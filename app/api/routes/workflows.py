@@ -36,15 +36,16 @@ def create_workflow(
         created_by=context.subject,
     )
     session.add(workflow)
-    append_audit_event(
-        session,
-        event_type="workflow_created",
-        actor_id=context.subject,
-        correlation_id=str(uuid.uuid4()),
-        workflow_id=workflow.id,
-        details={"name": workflow.name, "version": workflow.version},
-    )
     try:
+        session.flush()
+        append_audit_event(
+            session,
+            event_type="workflow_created",
+            actor_id=context.subject,
+            correlation_id=str(uuid.uuid4()),
+            workflow_id=workflow.id,
+            details={"name": workflow.name, "version": workflow.version},
+        )
         session.commit()
     except IntegrityError as exc:
         session.rollback()
@@ -126,17 +127,18 @@ def create_execution(
         requested_by=context.subject,
     )
     session.add(execution)
-    session.add(DispatchOutbox(execution_id=execution.id))
-    append_audit_event(
-        session,
-        event_type="execution_requested",
-        actor_id=context.subject,
-        correlation_id=request_correlation_id,
-        workflow_id=workflow_id,
-        execution_id=execution.id,
-        details={"trigger_type": payload.trigger_type.value},
-    )
     try:
+        session.flush()
+        session.add(DispatchOutbox(execution_id=execution.id))
+        append_audit_event(
+            session,
+            event_type="execution_requested",
+            actor_id=context.subject,
+            correlation_id=request_correlation_id,
+            workflow_id=workflow_id,
+            execution_id=execution.id,
+            details={"trigger_type": payload.trigger_type.value},
+        )
         session.commit()
     except IntegrityError:
         session.rollback()
