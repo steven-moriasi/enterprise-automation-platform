@@ -30,4 +30,7 @@
 
 ## Worker termination during execution
 
-The initial release lacks automatic lease recovery. Confirm whether an external side effect occurred, then recover the execution manually. Automated lease/reaper handling is a required roadmap item.
+1. Inspect the worker log and execution heartbeat.
+2. Allow the lease to expire; the scheduler requeues it while attempts remain.
+3. If attempts are exhausted, inspect the dead-letter record before manual retry.
+4. Confirm whether an external side effect occurred because lease recovery does not replace connector idempotency.
