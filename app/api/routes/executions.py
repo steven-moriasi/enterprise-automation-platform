@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -25,6 +25,30 @@ def _get_execution(session: Session, execution_id: str) -> Execution:
     if execution is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution not found")
     return execution
+
+
+@router.get("", response_model=list[ExecutionRead])
+def list_executions(
+    _context: ViewerContext,
+    session: Annotated[Session, Depends(get_session)],
+    workflow_id: str | None = None,
+    execution_status: Annotated[
+        ExecutionStatus | None,
+        Query(alias="status"),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[Execution]:
+    query = (
+        select(Execution)
+        .options(selectinload(Execution.step_executions))
+        .order_by(Execution.created_at.desc(), Execution.id.desc())
+        .limit(limit)
+    )
+    if workflow_id is not None:
+        query = query.where(Execution.workflow_id == workflow_id)
+    if execution_status is not None:
+        query = query.where(Execution.status == execution_status)
+    return list(session.scalars(query))
 
 
 @router.get("/{execution_id}", response_model=ExecutionRead)
@@ -69,8 +93,11 @@ def retry_dead_letter_execution(
             detail="Only dead-lettered executions can be retried manually",
         )
     execution.status = ExecutionStatus.QUEUED
+    execution.attempt_count = 0
     execution.finished_at = None
     execution.next_retry_at = None
+    execution.last_error_code = None
+    execution.last_error_message = None
     session.add(DispatchOutbox(execution_id=execution.id))
     append_audit_event(
         session,
