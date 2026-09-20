@@ -14,7 +14,7 @@ dependencies = [
     "fastapi==0.115.12",
     "prometheus-client==0.22.1",
     "psycopg[binary]==3.3.5",
-    "pydantic-settings==2.9.1",
+    "pydantic-settings==2.15.0",
     "pyjwt[crypto]==2.10.1",
     "redis==6.2.0",
     "sqlalchemy==2.0.41",
