@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 dependencies = [
-    "alembic==1.16.1",
+    "alembic==1.19.2",
     "fastapi==0.115.12",
     "prometheus-client==0.22.1",
     "psycopg[binary]==3.2.9",
