@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from time import monotonic
+from typing import Protocol, cast
 
 import structlog
 from sqlalchemy import select, update
@@ -15,6 +16,10 @@ from app.services.audit import append_audit_event
 from app.services.steps import DefaultStepRunner, StepContext, StepFailure, StepRunner
 
 logger = structlog.get_logger()
+
+
+class _RowCountResult(Protocol):
+    rowcount: int
 
 
 def retry_delay_seconds(execution_id: str, attempt: int, base_seconds: int) -> float:
@@ -42,22 +47,25 @@ class ExecutionService:
 
     def run(self, execution_id: str) -> bool:
         now = datetime.now(UTC)
-        claimed = self.session.execute(
-            update(Execution)
-            .where(
-                Execution.id == execution_id,
-                Execution.status == ExecutionStatus.QUEUED,
-            )
-            .values(
-                status=ExecutionStatus.RUNNING,
-                started_at=datetime.now(UTC),
-                attempt_count=Execution.attempt_count + 1,
-                next_retry_at=None,
-                lease_owner=self.worker_id,
-                lease_token=self.lease_token,
-                heartbeat_at=now,
-                lease_expires_at=now + timedelta(seconds=self.lease_seconds),
-            )
+        claimed = cast(
+            _RowCountResult,
+            self.session.execute(
+                update(Execution)
+                .where(
+                    Execution.id == execution_id,
+                    Execution.status == ExecutionStatus.QUEUED,
+                )
+                .values(
+                    status=ExecutionStatus.RUNNING,
+                    started_at=datetime.now(UTC),
+                    attempt_count=Execution.attempt_count + 1,
+                    next_retry_at=None,
+                    lease_owner=self.worker_id,
+                    lease_token=self.lease_token,
+                    heartbeat_at=now,
+                    lease_expires_at=now + timedelta(seconds=self.lease_seconds),
+                )
+            ),
         )
         self.session.commit()
         if claimed.rowcount != 1:
@@ -275,17 +283,20 @@ class ExecutionService:
 
     def _renew_lease(self, execution_id: str) -> bool:
         now = datetime.now(UTC)
-        renewed = self.session.execute(
-            update(Execution)
-            .where(
-                Execution.id == execution_id,
-                Execution.status == ExecutionStatus.RUNNING,
-                Execution.lease_token == self.lease_token,
-            )
-            .values(
-                heartbeat_at=now,
-                lease_expires_at=now + timedelta(seconds=self.lease_seconds),
-            )
+        renewed = cast(
+            _RowCountResult,
+            self.session.execute(
+                update(Execution)
+                .where(
+                    Execution.id == execution_id,
+                    Execution.status == ExecutionStatus.RUNNING,
+                    Execution.lease_token == self.lease_token,
+                )
+                .values(
+                    heartbeat_at=now,
+                    lease_expires_at=now + timedelta(seconds=self.lease_seconds),
+                )
+            ),
         )
         self.session.commit()
         return renewed.rowcount == 1

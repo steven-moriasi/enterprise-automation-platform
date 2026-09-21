@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Protocol, cast
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -13,6 +14,10 @@ from app.domain.models import (
 )
 from app.infrastructure.queue import ExecutionDispatcher
 from app.services.audit import append_audit_event
+
+
+class _RowCountResult(Protocol):
+    rowcount: int
 
 
 def reap_expired_executions(session: Session, *, batch_size: int = 100) -> int:
@@ -37,24 +42,27 @@ def reap_expired_executions(session: Session, *, batch_size: int = 100) -> int:
             continue
         retryable = execution.attempt_count < execution.workflow.max_attempts
         new_status = ExecutionStatus.QUEUED if retryable else ExecutionStatus.DEAD_LETTER
-        result = session.execute(
-            update(Execution)
-            .where(
-                Execution.id == execution.id,
-                Execution.status == ExecutionStatus.RUNNING,
-                Execution.lease_token == lease_token,
-                Execution.lease_expires_at <= now,
-            )
-            .values(
-                status=new_status,
-                lease_owner=None,
-                lease_token=None,
-                lease_expires_at=None,
-                heartbeat_at=None,
-                finished_at=now if not retryable else None,
-                last_error_code="worker_lease_expired",
-                last_error_message="Worker lease expired before completion",
-            )
+        result = cast(
+            _RowCountResult,
+            session.execute(
+                update(Execution)
+                .where(
+                    Execution.id == execution.id,
+                    Execution.status == ExecutionStatus.RUNNING,
+                    Execution.lease_token == lease_token,
+                    Execution.lease_expires_at <= now,
+                )
+                .values(
+                    status=new_status,
+                    lease_owner=None,
+                    lease_token=None,
+                    lease_expires_at=None,
+                    heartbeat_at=None,
+                    finished_at=now if not retryable else None,
+                    last_error_code="worker_lease_expired",
+                    last_error_message="Worker lease expired before completion",
+                )
+            ),
         )
         if result.rowcount != 1:
             session.rollback()
@@ -106,17 +114,20 @@ def prepare_due_schedules(session: Session, *, batch_size: int = 100) -> int:
     prepared = 0
     for schedule in schedules:
         due_at = schedule.next_run_at
-        result = session.execute(
-            update(WorkflowSchedule)
-            .where(
-                WorkflowSchedule.id == schedule.id,
-                WorkflowSchedule.enabled.is_(True),
-                WorkflowSchedule.next_run_at == due_at,
-            )
-            .values(
-                last_run_at=due_at,
-                next_run_at=due_at + timedelta(seconds=schedule.interval_seconds),
-            )
+        result = cast(
+            _RowCountResult,
+            session.execute(
+                update(WorkflowSchedule)
+                .where(
+                    WorkflowSchedule.id == schedule.id,
+                    WorkflowSchedule.enabled.is_(True),
+                    WorkflowSchedule.next_run_at == due_at,
+                )
+                .values(
+                    last_run_at=due_at,
+                    next_run_at=due_at + timedelta(seconds=schedule.interval_seconds),
+                )
+            ),
         )
         if result.rowcount != 1:
             continue
@@ -165,14 +176,17 @@ def prepare_due_retries(session: Session, *, batch_size: int = 100) -> int:
     )
     prepared = 0
     for execution_id in execution_ids:
-        result = session.execute(
-            update(Execution)
-            .where(
-                Execution.id == execution_id,
-                Execution.status == ExecutionStatus.RETRY_SCHEDULED,
-                Execution.next_retry_at <= now,
-            )
-            .values(status=ExecutionStatus.QUEUED, next_retry_at=None)
+        result = cast(
+            _RowCountResult,
+            session.execute(
+                update(Execution)
+                .where(
+                    Execution.id == execution_id,
+                    Execution.status == ExecutionStatus.RETRY_SCHEDULED,
+                    Execution.next_retry_at <= now,
+                )
+                .values(status=ExecutionStatus.QUEUED, next_retry_at=None)
+            ),
         )
         if result.rowcount != 1:
             continue
