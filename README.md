@@ -1,6 +1,6 @@
 # Enterprise Automation Platform
 
-A portfolio/reference implementation of a reliable workflow execution service. It demonstrates the architecture and failure-handling patterns behind enterprise process automation without claiming to be an original commercial system or exposing client implementations.
+A reference implementation of a reliable workflow execution service. It demonstrates the architecture and failure-handling patterns behind enterprise process automation without claiming to be an original commercial system or exposing client implementations.
 
 ## Problem
 
@@ -211,11 +211,19 @@ pytest --cov=app --cov-report=term-missing
 - [Failure model](docs/failure-model.md)
 - [Threat model](docs/threat-model.md)
 - [Operations runbook](docs/runbook.md)
-- [Principal Engineer review](docs/principal-engineer-review.md)
 - [ADR 001: Modular monolith](docs/adr/001-modular-monolith.md)
 - [ADR 002: PostgreSQL source of truth](docs/adr/002-postgres-source-of-truth.md)
 - [ADR 003: Transactional dispatch outbox](docs/adr/003-transactional-outbox.md)
 - [ADR 004: Expiring worker leases](docs/adr/004-expiring-worker-leases.md)
+
+## Limits
+
+- External connector adapters and provider-side idempotency contracts are outside this release.
+- Service and API tests use SQLite; CI validates PostgreSQL migrations but does not run the full
+  execution suite against PostgreSQL.
+- End-to-end Keycloak validation and distributed trace export are not implemented.
+- Scheduling does not support cron expressions, calendars, or misfire policies.
+- The system has not been load tested and makes no production throughput or availability claim.
 
 ## Roadmap
 
@@ -223,6 +231,8 @@ pytest --cov=app --cov-report=term-missing
 - OpenTelemetry trace export
 - PostgreSQL integration tests in CI
 - Keycloak realm import and end-to-end authorization tests
+- Cron expressions, calendars, and misfire policies
+- Measured load and fault testing
 - Operations UI after the API contract stabilizes
 
 ## License

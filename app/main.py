@@ -23,7 +23,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Enterprise Automation Platform",
     description=(
-        "Portfolio/reference implementation for reliable enterprise workflow execution. "
+        "Reference implementation for reliable enterprise workflow execution. "
         "It is not presented as a deployed commercial system."
     ),
     version="0.1.0",
